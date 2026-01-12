@@ -1,0 +1,221 @@
+# Shadow IT Detection Policies
+
+# Approved cloud services
+approved_services:
+  aws:
+    enabled: true
+    services:
+      - "S3"
+      - "EC2"
+      - "Lambda"
+      - "CloudFront"
+    alert_on_unknown: true
+
+  azure:
+    enabled: true
+    services:
+      - "Blob Storage"
+      - "Virtual Machines"
+    alert_on_unknown: true
+
+  gcp:
+    enabled: true
+    services:
+      - "Cloud Storage"
+      - "Compute Engine"
+    alert_on_unknown: true
+
+# Approved SaaS applications
+approved_saas:
+  - "GitHub"
+  - "GitLab"
+  - "Slack"
+  - "Zoom"
+  - "Google Drive"
+  # Add your organization's approved SaaS here
+
+# Blocked/unauthorized services
+blocked_services:
+  - "Dropbox"          # If using corporate file sharing instead
+  - "WeTransfer"       # Often used for data exfiltration
+  - "Personal Gmail"   # If corporate email required
+  # Add services your organization blocks
+
+# DNS monitoring settings
+dns_monitoring:
+  # Enable DNS query monitoring
+  enabled: true
+
+  # Suspicious domain detection
+  suspicious_patterns:
+    # Long subdomain names (potential data encoding)
+    max_subdomain_length: 50
+
+    # High entropy threshold (random-looking strings)
+    entropy_threshold: 4.5
+
+    # Suspicious TLDs
+    suspicious_tlds:
+      - ".tk"
+      - ".ml"
+      - ".ga"
+      - ".cf"
+      - ".gq"
+      - ".xyz"
+
+  # DNS tunneling detection
+  tunneling_detection:
+    enabled: true
+    # Minimum queries per minute to trigger alert
+    query_threshold: 10
+    # Maximum subdomain depth
+    max_subdomain_depth: 5
+
+# TLS/SNI monitoring settings
+tls_monitoring:
+  # Enable SNI extraction
+  enabled: true
+
+  # Alert on connections to unknown services
+  alert_unknown: true
+
+  # Track TLS versions
+  track_tls_versions: true
+
+  # Minimum acceptable TLS version
+  min_tls_version: "1.2"
+
+# Service discovery settings
+discovery:
+  # Active scanning
+  active_scan:
+    enabled: false  # Passive only by default
+    port_range: "1-1024"
+
+  # Passive monitoring
+  passive_monitoring:
+    enabled: true
+    interfaces:
+      - "en0"
+
+  # Service fingerprinting
+  fingerprinting:
+    enabled: true
+    update_frequency_hours: 24
+
+# Alerting settings
+alerts:
+  enabled: true
+
+  # Alert conditions
+  conditions:
+    # New unauthorized service detected
+    unauthorized_service: true
+
+    # Suspicious DNS query
+    suspicious_dns: true
+
+    # DNS tunneling detected
+    dns_tunneling: true
+
+    # Connection to blocked service
+    blocked_service: true
+
+    # Unknown cloud service
+    unknown_cloud_service: true
+
+  # Alert destinations
+  destinations:
+    # Console output
+    console: true
+
+    # Log file
+    log_file: "/var/log/shadow-it.log"
+
+    # Syslog
+    syslog:
+      enabled: false
+      server: "syslog.example.com"
+      port: 514
+
+    # Webhook
+    webhook:
+      enabled: false
+      url: ""
+      headers: {}
+
+    # Email
+    email:
+      enabled: false
+      to: "security@example.com"
+      subject: "Shadow IT Alert"
+
+# Reporting settings
+reporting:
+  # Generate periodic reports
+  enabled: true
+
+  # Report frequency
+  frequency_hours: 24
+
+  # Report format (text, json, html)
+  format: "text"
+
+  # Include in reports
+  include:
+    cloud_services: true
+    saas_applications: true
+    suspicious_domains: true
+    statistics: true
+
+  # Output directory
+  output_dir: "/var/log/shadow-it-reports"
+
+# Whitelisting
+whitelist:
+  # Domains that should never trigger alerts
+  domains:
+    - "internal.company.com"
+    - "vpn.company.com"
+
+  # IP ranges that are always allowed
+  ip_ranges:
+    - "192.168.0.0/16"
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+
+# Integration
+integrations:
+  # CMDB integration
+  cmdb:
+    enabled: false
+    endpoint: ""
+    api_key: ""
+
+  # Asset management
+  asset_management:
+    enabled: false
+    sync_interval_hours: 24
+
+  # Threat intelligence
+  threat_intel:
+    enabled: false
+    feeds: []
+
+# Compliance
+compliance:
+  # Regulatory requirements
+  frameworks:
+    - "SOC2"
+    - "GDPR"
+
+  # Data residency requirements
+  data_residency:
+    allowed_countries:
+      - "US"
+      - "EU"
+
+  # Audit logging
+  audit:
+    enabled: true
+    retention_days: 365

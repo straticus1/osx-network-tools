@@ -1,0 +1,118 @@
+# JWT/OAuth Token Validation Configuration
+
+# Trusted token issuers (iss claim)
+trusted_issuers:
+  - "https://accounts.google.com"
+  - "https://login.microsoftonline.com"
+  # Add your organization's identity providers
+  # - "https://auth.yourcompany.com"
+
+# Required claims in JWT tokens
+required_claims:
+  - "iss"  # Issuer
+  - "sub"  # Subject
+  - "exp"  # Expiration
+  - "iat"  # Issued at
+  # - "aud"  # Audience (uncomment if required)
+
+# Allowed signature algorithms
+allowed_algorithms:
+  - "RS256"  # RSA with SHA-256
+  - "RS384"  # RSA with SHA-384
+  - "RS512"  # RSA with SHA-512
+  - "ES256"  # ECDSA with SHA-256
+  - "ES384"  # ECDSA with SHA-384
+  - "ES512"  # ECDSA with SHA-512
+  - "EdDSA"  # EdDSA signature
+
+# Blocked algorithms (insecure)
+blocked_algorithms:
+  - "none"   # No signature (CRITICAL)
+  - "HS256"  # Symmetric key (use only if absolutely necessary)
+  - "HS384"
+  - "HS512"
+
+# Token validation settings
+validation:
+  # Verify token expiration
+  verify_exp: true
+
+  # Clock skew allowance (seconds)
+  leeway: 60
+
+  # Verify token signature
+  verify_signature: true
+
+  # Verify issuer matches trusted list
+  verify_issuer: true
+
+  # Verify audience (if specified)
+  verify_audience: false
+
+# JWKS (JSON Web Key Set) endpoints for public key retrieval
+jwks_endpoints:
+  # Issuer -> JWKS endpoint URL
+  "https://accounts.google.com": "https://www.googleapis.com/oauth2/v3/certs"
+  "https://login.microsoftonline.com": "https://login.microsoftonline.com/common/discovery/v2.0/keys"
+
+# Token lifetime policies
+token_lifetime:
+  # Maximum access token lifetime (seconds)
+  max_access_token_lifetime: 3600  # 1 hour
+
+  # Maximum refresh token lifetime (seconds)
+  max_refresh_token_lifetime: 2592000  # 30 days
+
+  # Warn if token lifetime exceeds these values
+  warn_on_long_lifetime: true
+
+# OAuth 2.0 flow validation
+oauth_flows:
+  # Allowed OAuth 2.0 grant types
+  allowed_grant_types:
+    - "authorization_code"
+    - "refresh_token"
+
+  # Blocked grant types (less secure)
+  blocked_grant_types:
+    - "password"  # Resource Owner Password Credentials
+    - "implicit"  # Implicit flow (deprecated)
+
+# Monitoring and alerting
+monitoring:
+  # Capture JWT tokens from these sources
+  capture_from:
+    - "Authorization"  # Authorization header
+    - "Cookie"         # Cookies
+    - "JSON"           # JSON request/response bodies
+
+  # Alert on these conditions
+  alerts:
+    enabled: true
+    on_expired_token: true
+    on_invalid_signature: true
+    on_unknown_issuer: true
+    on_blocked_algorithm: true
+    on_missing_claims: true
+
+# Token storage and caching
+storage:
+  # Cache validated tokens (for performance)
+  cache_enabled: true
+
+  # Cache TTL (seconds)
+  cache_ttl: 300
+
+  # Maximum cached tokens
+  cache_size: 1000
+
+# Logging
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+
+  # Log token payloads (disable in production for security)
+  log_payloads: false
+
+  # Log file path
+  log_file: "/var/log/jwt-inspector.log"

@@ -1,0 +1,78 @@
+# Binaries
+/bin/
+cmd/zt-validator/zt-validator
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.pyc
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+/var/log/
+
+# Sensitive data
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+configs/*-local.yaml
+configs/*.secret.yaml
+
+# SSH
+.ssh/
+*.pub.backup
+backups/
+
+# Test outputs
+coverage.txt
+*.coverprofile
+
+# OS
+.DS_Store
+Thumbs.db

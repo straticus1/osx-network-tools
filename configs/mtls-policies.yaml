@@ -1,0 +1,77 @@
+# mTLS Certificate Validation Policies
+
+# Minimum key size in bits
+min_key_size: 2048
+
+# Maximum certificate validity period (in days)
+# Apple/Google enforce 825 days maximum
+max_cert_age_days: 825
+
+# Require OCSP responder in certificates
+require_ocsp: true
+
+# Allow self-signed certificates (for testing/development only)
+allow_self_signed: false
+
+# Days before expiration to trigger warnings
+expiry_warning_days: 30
+
+# Required key usages
+required_key_usages:
+  - DigitalSignature
+
+# Required extended key usages for different certificate types
+required_ext_key_usages:
+  server:
+    - ServerAuth
+  client:
+    - ClientAuth
+
+# Blocked certificate issuers (by subject string)
+blocked_issuers: []
+  # Example:
+  # - "CN=Untrusted CA,O=Bad Actors Inc"
+
+# Certificate pinning configuration
+pinned_certificates:
+  # Hostname -> Certificate fingerprint (SHA256)
+  # Example:
+  # "example.com": "SHA256:abcd1234..."
+
+# Allowed signature algorithms
+allowed_signature_algorithms:
+  - SHA256WithRSA
+  - SHA384WithRSA
+  - SHA512WithRSA
+  - ECDSAWithSHA256
+  - ECDSAWithSHA384
+  - ECDSAWithSHA512
+  - Ed25519
+
+# Blocked signature algorithms (deprecated/weak)
+blocked_signature_algorithms:
+  - SHA1WithRSA
+  - MD5WithRSA
+  - MD2WithRSA
+
+# TLS version requirements
+min_tls_version: "1.2"
+
+# Alert configuration
+alerts:
+  # Send alerts for these conditions
+  enabled: true
+  on_expiry: true
+  on_validation_failure: true
+  on_self_signed: true
+  on_unknown_ca: true
+  on_cert_change: true
+
+# Monitoring settings
+monitoring:
+  # Interfaces to monitor (empty = all)
+  interfaces: []
+  # Capture filter
+  capture_filter: "tcp port 443"
+  # Maximum certificates to cache
+  cache_size: 1000

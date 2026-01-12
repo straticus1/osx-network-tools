@@ -1,0 +1,394 @@
+# Data Exfiltration / Egress Auditing Policies
+
+# Detection thresholds
+thresholds:
+  # Large upload detection
+  large_upload:
+    # Minimum bytes to trigger alert
+    bytes: 104857600  # 100 MB
+
+    # Time window (seconds)
+    duration: 300  # 5 minutes
+
+    # Alert immediately
+    alert_immediate: true
+
+  # Unusual port detection
+  unusual_ports:
+    # Ports above this are considered unusual
+    high_port_threshold: 49152
+
+    # Minimum connections to trigger alert
+    connection_threshold: 5
+
+  # Data transfer rate
+  transfer_rate:
+    # Maximum bytes per second for normal operations
+    max_rate: 10485760  # 10 MB/s
+
+    # Alert if exceeded for this duration (seconds)
+    duration: 60
+
+  # Connection duration
+  long_connections:
+    # Connections longer than this are flagged (seconds)
+    max_duration: 3600  # 1 hour
+
+    # With minimum data transfer (bytes)
+    min_data_transfer: 1048576  # 1 MB
+
+# Beaconing detection
+beaconing:
+  enabled: true
+
+  # Minimum connections to detect pattern
+  min_connections: 5
+
+  # Maximum jitter (seconds) to consider beaconing
+  max_jitter: 5.0
+
+  # Minimum interval between connections (seconds)
+  min_interval: 10
+
+  # Maximum interval between connections (seconds)
+  max_interval: 300
+
+  # Alert severity
+  severity: "CRITICAL"
+
+# DNS tunneling detection
+dns_tunneling:
+  enabled: true
+
+  # Minimum queries per minute
+  min_queries_per_minute: 10
+
+  # Long subdomain threshold
+  long_subdomain_length: 50
+
+  # High entropy threshold
+  entropy_threshold: 4.0
+
+  # Alert severity
+  severity: "HIGH"
+
+# Protocol monitoring
+protocols:
+  # Allowed protocols
+  allowed:
+    - "TCP"
+    - "UDP"
+    - "ICMP"
+
+  # Protocols to monitor closely
+  monitored:
+    TCP:
+      enabled: true
+      # Track connection states
+      track_states: true
+
+    UDP:
+      enabled: true
+      # Alert on large UDP transfers
+      alert_large_transfers: true
+      threshold: 10485760  # 10 MB
+
+    ICMP:
+      enabled: true
+      # Alert on ICMP tunneling
+      alert_tunneling: true
+
+# Port policies
+ports:
+  # Always allowed (won't trigger alerts)
+  allowed:
+    - 80   # HTTP
+    - 443  # HTTPS
+    - 22   # SSH
+    - 25   # SMTP
+    - 53   # DNS
+    - 143  # IMAP
+    - 587  # SMTP (submission)
+    - 993  # IMAPS
+    - 995  # POP3S
+
+  # Blocked (always alert)
+  blocked:
+    - 23   # Telnet (insecure)
+    - 21   # FTP (insecure)
+    - 69   # TFTP
+
+  # Suspicious (alert if large data transfer)
+  suspicious:
+    - 1337  # Often used by malware
+    - 31337 # leet speak
+    - 4444  # Metasploit default
+    - 5555
+    - 6666
+    - 7777
+    - 8888
+    - 9999
+
+# Destination filtering
+destinations:
+  # Trusted IP ranges (corporate, partners)
+  trusted:
+    - "192.168.0.0/16"
+    - "10.0.0.0/8"
+    # Add your corporate IP ranges
+
+  # Blocked countries (geo-filtering)
+  blocked_countries: []
+    # Examples:
+    # - "KP"  # North Korea
+    # - "IR"  # Iran
+
+  # Known malicious IPs (integrate with threat intel)
+  blacklist: []
+
+  # Whitelist (never alert)
+  whitelist:
+    - "8.8.8.8"      # Google DNS
+    - "1.1.1.1"      # Cloudflare DNS
+    # Add trusted destinations
+
+# Data classification
+data_classification:
+  # Sensitive data indicators
+  sensitive_patterns:
+    # Credit card numbers
+    - pattern: '\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}'
+      name: "Credit Card"
+      severity: "CRITICAL"
+
+    # Social Security Numbers
+    - pattern: '\d{3}-\d{2}-\d{4}'
+      name: "SSN"
+      severity: "CRITICAL"
+
+    # API keys
+    - pattern: '(?i)(api[_-]?key|apikey)\s*[:=]\s*["\']?[\w-]{20,}["\']?'
+      name: "API Key"
+      severity: "HIGH"
+
+  # File types to monitor
+  monitored_file_types:
+    - ".zip"
+    - ".tar"
+    - ".gz"
+    - ".7z"
+    - ".rar"
+    - ".db"
+    - ".sql"
+    - ".csv"
+    - ".xlsx"
+    - ".pdf"
+
+# Alerting
+alerts:
+  enabled: true
+
+  # Severity levels
+  severities:
+    CRITICAL:
+      enabled: true
+      immediate: true
+
+    HIGH:
+      enabled: true
+      immediate: true
+
+    MEDIUM:
+      enabled: true
+      immediate: false
+
+    LOW:
+      enabled: false
+
+  # Alert destinations
+  destinations:
+    console:
+      enabled: true
+      colors: true
+
+    file:
+      enabled: true
+      path: "/var/log/egress-alerts.log"
+      rotate: true
+      max_size_mb: 100
+
+    syslog:
+      enabled: false
+      server: "syslog.example.com"
+      port: 514
+      protocol: "UDP"
+
+    webhook:
+      enabled: false
+      url: ""
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+
+    email:
+      enabled: false
+      smtp_server: "smtp.example.com"
+      smtp_port: 587
+      from: "alerts@example.com"
+      to:
+        - "security@example.com"
+      subject_prefix: "[EGRESS ALERT]"
+
+    slack:
+      enabled: false
+      webhook_url: ""
+      channel: "#security-alerts"
+
+# Monitoring settings
+monitoring:
+  # Interfaces to monitor
+  interfaces:
+    - "en0"
+    # - "en1"
+
+  # Capture settings
+  capture:
+    # Snapshot length
+    snaplen: 65536
+
+    # Promiscuous mode
+    promiscuous: true
+
+    # Buffer timeout (ms)
+    timeout: 1000
+
+  # Connection tracking
+  connection_tracking:
+    enabled: true
+
+    # Cleanup stale connections
+    cleanup_interval_seconds: 300
+
+    # Connection timeout (seconds)
+    connection_timeout: 3600
+
+# Reporting
+reporting:
+  enabled: true
+
+  # Report schedule
+  schedule:
+    # Frequency: hourly, daily, weekly
+    frequency: "daily"
+
+    # Time to generate report (24-hour format)
+    time: "00:00"
+
+  # Report format
+  format: "text"  # text, json, html, pdf
+
+  # Include in reports
+  include:
+    summary: true
+    top_talkers: true
+    suspicious_connections: true
+    blocked_connections: true
+    statistics: true
+    graphs: false
+
+  # Output
+  output:
+    directory: "/var/log/egress-reports"
+    filename_format: "egress-report-%Y%m%d.txt"
+
+  # Retention
+  retention_days: 90
+
+# Baseline learning
+baseline:
+  # Learn normal behavior
+  enabled: true
+
+  # Learning period (days)
+  learning_period_days: 7
+
+  # Auto-update baseline
+  auto_update: true
+
+  # Update frequency (days)
+  update_frequency_days: 30
+
+  # Baseline metrics
+  metrics:
+    - "average_bytes_per_connection"
+    - "common_ports"
+    - "common_destinations"
+    - "connection_duration"
+    - "time_of_day_patterns"
+
+# Integration
+integrations:
+  # SIEM integration
+  siem:
+    enabled: false
+    type: "splunk"  # splunk, elasticsearch, sentinel
+    endpoint: ""
+    api_key: ""
+
+  # DLP integration
+  dlp:
+    enabled: false
+    endpoint: ""
+
+  # Threat intelligence
+  threat_intel:
+    enabled: false
+    feeds:
+      - name: "AlienVault OTX"
+        enabled: false
+        api_key: ""
+      - name: "Abuse.ch"
+        enabled: false
+
+  # SOAR integration
+  soar:
+    enabled: false
+    platform: ""
+    endpoint: ""
+
+# Compliance
+compliance:
+  # Regulatory requirements
+  frameworks:
+    - "PCI-DSS"
+    - "HIPAA"
+    - "GDPR"
+    - "SOC2"
+
+  # Data retention requirements
+  retention:
+    logs_days: 365
+    alerts_days: 730
+    reports_days: 2555  # 7 years
+
+  # Audit trail
+  audit:
+    enabled: true
+    track_all_connections: true
+    track_configuration_changes: true
+
+# Performance
+performance:
+  # Maximum connections to track
+  max_tracked_connections: 100000
+
+  # Memory limit (MB)
+  memory_limit_mb: 1024
+
+  # CPU limit (percentage)
+  cpu_limit_percent: 50
+
+  # Sampling (for high-volume environments)
+  sampling:
+    enabled: false
+    rate: 0.1  # Sample 10% of traffic

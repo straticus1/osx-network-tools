@@ -1,0 +1,132 @@
+# SSH Key Management Policies
+
+# Key rotation policies
+rotation:
+  # Maximum key age before rotation (days)
+  max_key_age_days: 365
+
+  # Warn when key age exceeds this (days)
+  warn_key_age_days: 330
+
+  # Automatic rotation schedule
+  auto_rotate: false
+
+  # Backup old keys before rotation
+  backup_enabled: true
+
+  # Backup directory
+  backup_dir: "~/.ssh/backups"
+
+# Key generation policies
+generation:
+  # Default key type for new keys
+  default_key_type: "ed25519"
+
+  # Minimum key sizes (bits)
+  min_key_sizes:
+    rsa: 2048
+    ecdsa: 256
+
+  # Recommended key sizes
+  recommended_key_sizes:
+    rsa: 4096
+    ecdsa: 521
+
+  # Require passphrase protection
+  require_passphrase: true
+
+  # Default key permissions
+  private_key_permissions: "0600"
+  public_key_permissions: "0644"
+
+# Allowed key types
+allowed_key_types:
+  - "ed25519"  # Recommended (fast, secure, small)
+  - "rsa"      # Widely compatible
+  - "ecdsa"    # Good alternative
+
+# Blocked key types (deprecated/insecure)
+blocked_key_types:
+  - "dsa"      # Deprecated, max 1024 bits
+  - "ssh-dss"  # DSA variant
+
+# Authorized keys policies
+authorized_keys:
+  # Required restrictions/options
+  required_options: []
+    # Examples:
+    # - "no-port-forwarding"
+    # - "no-X11-forwarding"
+    # - "no-agent-forwarding"
+
+  # Recommended restrictions
+  recommended_options:
+    - "no-port-forwarding"
+    - "no-X11-forwarding"
+    - "no-agent-forwarding"
+
+  # Require 'from' restriction (IP/hostname)
+  require_from_restriction: false
+
+  # Require 'command' restriction
+  require_command_restriction: false
+
+  # Audit frequency (days)
+  audit_frequency_days: 90
+
+# SSH config policies
+ssh_config:
+  # Required security settings
+  required_settings:
+    IdentitiesOnly: "yes"
+    ServerAliveInterval: 60
+    ServerAliveCountMax: 3
+
+  # Recommended settings
+  recommended_settings:
+    UseRoaming: "no"
+    HashKnownHosts: "yes"
+    VerifyHostKeyDNS: "ask"
+    StrictHostKeyChecking: "ask"
+
+  # Blocked settings
+  blocked_settings:
+    StrictHostKeyChecking: "no"  # Never disable host key checking
+
+# Certificate-based SSH (SSH-CERT)
+certificates:
+  # Prefer certificates over keys
+  prefer_certificates: false
+
+  # Maximum certificate validity (hours)
+  max_cert_validity_hours: 24
+
+  # Certificate authority public keys
+  ca_public_keys: []
+
+# Monitoring and auditing
+monitoring:
+  # Enable SSH key usage monitoring
+  enabled: true
+
+  # Log SSH key usage
+  log_usage: true
+
+  # Alert on suspicious activity
+  alerts:
+    enabled: true
+    on_old_key: true
+    on_weak_key: true
+    on_unprotected_key: true
+    on_unauthorized_key_change: true
+
+# Compliance
+compliance:
+  # NIST SP 800-57 compliance
+  nist_800_57: true
+
+  # PCI-DSS compliance
+  pci_dss: false
+
+  # Custom compliance requirements
+  custom_policies: []
