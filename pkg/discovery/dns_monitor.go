@@ -303,6 +303,11 @@ type CloudService struct {
 	IsApproved  bool
 }
 
+// IdentifyCloudService identifies cloud service from domain
+func (dm *DNSMonitor) IdentifyCloudService(domain string) *CloudService {
+	return dm.identifyCloudService(domain)
+}
+
 // identifyCloudService identifies cloud service from domain
 func (dm *DNSMonitor) identifyCloudService(domain string) *CloudService {
 	domain = strings.ToLower(domain)

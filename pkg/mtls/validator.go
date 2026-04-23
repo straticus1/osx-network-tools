@@ -1,14 +1,19 @@
 package mtls
 
 import (
-	"crypto/tls"
+	"bytes"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
+
+	"golang.org/x/crypto/ocsp"
 )
 
 // CertificateInfo holds certificate validation results
@@ -179,6 +184,17 @@ func (v *Validator) ValidateCertificate(cert *x509.Certificate, intermediates []
 	return result
 }
 
+// ValidateCertificateForHost validates a certificate and enforces any stored pin for host.
+func (v *Validator) ValidateCertificateForHost(host string, cert *x509.Certificate, intermediates []*x509.Certificate) *ValidationResult {
+	result := v.ValidateCertificate(cert, intermediates)
+	// FIX 1C: enforce certificate pin if one is registered for this host
+	if err := v.checkCertPin(host, cert); err != nil {
+		result.Valid = false
+		result.Errors = append(result.Errors, err.Error())
+	}
+	return result
+}
+
 // validateChain validates the certificate chain
 func (v *Validator) validateChain(cert *x509.Certificate, intermediates []*x509.Certificate, result *ValidationResult) bool {
 	opts := x509.VerifyOptions{
@@ -210,48 +226,88 @@ func (v *Validator) validateChain(cert *x509.Certificate, intermediates []*x509.
 	return true
 }
 
-// CheckOCSPStatus checks the OCSP status of a certificate
+// CheckOCSPStatus checks the OCSP status of a certificate.
 func (v *Validator) CheckOCSPStatus(cert *x509.Certificate, issuer *x509.Certificate) (string, error) {
 	if len(cert.OCSPServer) == 0 {
 		return "no-ocsp", fmt.Errorf("certificate has no OCSP server")
 	}
 
-	ocspReq, err := x509.CreateRequest(cert, issuer, nil)
+	// FIX 1B-1: use the correct ocsp package API (not x509.CreateRequest)
+	ocspReqBytes, err := ocsp.CreateRequest(cert, issuer, nil)
 	if err != nil {
 		return "error", fmt.Errorf("failed to create OCSP request: %w", err)
 	}
 
-	resp, err := http.Post(cert.OCSPServer[0], "application/ocsp-request", nil)
+	// FIX 1B-2: validate URL (SSRF guard) and use a client with timeout
+	ocspURL := cert.OCSPServer[0]
+	u, err := url.Parse(ocspURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return "error", fmt.Errorf("invalid OCSP URL: %s", ocspURL)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(ocspURL, "application/ocsp-request", bytes.NewReader(ocspReqBytes))
 	if err != nil {
 		return "error", fmt.Errorf("failed to send OCSP request: %w", err)
 	}
-	defer resp.Body.Close()
 
-	ocspResp, err := io.ReadAll(resp.Body)
+	// FIX 1B-3: explicit close (not deferred) so we drain + close before returning
+	body, err := io.ReadAll(resp.Body)
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
 	if err != nil {
 		return "error", fmt.Errorf("failed to read OCSP response: %w", err)
 	}
 
-	parsedResp, err := x509.ParseOCSPResponse(ocspResp)
+	ocspResp, err := ocsp.ParseResponse(body, issuer)
 	if err != nil {
 		return "error", fmt.Errorf("failed to parse OCSP response: %w", err)
 	}
 
-	switch parsedResp.Status {
-	case 0:
+	switch ocspResp.Status {
+	case ocsp.Good:
 		return "good", nil
-	case 1:
-		return "revoked", nil
-	case 2:
-		return "unknown", nil
+	case ocsp.Revoked:
+		return "revoked", fmt.Errorf("certificate revoked at %v", ocspResp.RevokedAt)
 	default:
-		return "unknown", fmt.Errorf("unexpected OCSP status: %d", parsedResp.Status)
+		return "unknown", nil
 	}
 }
 
-// LoadPinnedCertificates loads pinned certificate fingerprints
+// LoadPinnedCertificates loads pinned certificate fingerprints from a file.
+// Each non-comment line must be: <hostname> <sha256-hex-fingerprint>
 func (v *Validator) LoadPinnedCertificates(pinFile string) error {
-	// TODO: Implement certificate pinning database
+	data, err := os.ReadFile(pinFile)
+	if err != nil {
+		return fmt.Errorf("reading pin file: %w", err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, " ", 2)
+		host := parts[0]
+		fp := ""
+		if len(parts) > 1 {
+			fp = parts[1]
+		}
+		v.PinnedFPs[host] = fp
+	}
+	return nil
+}
+
+// checkCertPin verifies the leaf certificate against a stored pin for host.
+// Returns an error if the pin exists but does not match.
+func (v *Validator) checkCertPin(host string, cert *x509.Certificate) error {
+	expectedFP, ok := v.PinnedFPs[host]
+	if !ok || expectedFP == "" {
+		return nil
+	}
+	fp := fmt.Sprintf("%x", sha256.Sum256(cert.Raw))
+	normalized := strings.ReplaceAll(strings.ToLower(expectedFP), ":", "")
+	if fp != normalized {
+		return fmt.Errorf("certificate pin mismatch for %s", host)
+	}
 	return nil
 }
 

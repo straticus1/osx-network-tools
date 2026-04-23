@@ -110,7 +110,7 @@ func runDNSMonitor(cmd *cobra.Command, args []string) error {
 		}
 
 		// Check for cloud services
-		if service := monitor.identifyCloudService(query.QueryName); service != nil {
+		if service := monitor.IdentifyCloudService(query.QueryName); service != nil {
 			key := service.Provider + ":" + service.ServiceName
 			if !cloudServices[key] {
 				cloudServices[key] = true

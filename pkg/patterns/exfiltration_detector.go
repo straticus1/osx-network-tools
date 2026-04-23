@@ -2,6 +2,7 @@ package patterns
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -399,7 +400,7 @@ func standardDeviation(values []float64, mean float64) float64 {
 		variance += diff * diff
 	}
 	variance /= float64(len(values))
-	return variance // Simplified - not taking square root for comparison
+	return math.Sqrt(variance)
 }
 
 func extractBaseDomain(domain string) string {
@@ -426,7 +427,7 @@ func calculateEntropy(s string) float64 {
 	for _, count := range freq {
 		p := float64(count) / length
 		if p > 0 {
-			entropy -= p * (0.693147 * float64(count))
+			entropy -= p * math.Log2(p)
 		}
 	}
 
