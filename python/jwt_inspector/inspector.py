@@ -122,6 +122,12 @@ class JWTInspector:
         self.validation_keys = {}
         self.trusted_issuers = self.config.get('trusted_issuers', [])
         self.required_claims = self.config.get('required_claims', [])
+        # Never derive accepted algorithms from an untrusted JWT header. The
+        # asymmetric default also avoids treating a public key as an HMAC key.
+        self.accepted_algorithms = self.config.get(
+            'accepted_algorithms',
+            ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'EdDSA']
+        )
 
     def capture_tokens(self, interface: str, count: int = 0, filter_str: str = "tcp port 80 or tcp port 443"):
         """Capture JWT tokens from network traffic"""
@@ -215,10 +221,16 @@ class JWTInspector:
         # Verify signature if public key provided
         if public_key:
             try:
+                if token_info.algorithm not in self.accepted_algorithms:
+                    token_info.errors.append(
+                        f"Disallowed JWT algorithm: {token_info.algorithm}"
+                    )
+                    is_valid = False
+                    return is_valid
                 jwt.decode(
                     token_info.raw_token,
                     public_key,
-                    algorithms=[token_info.algorithm],
+                    algorithms=self.accepted_algorithms,
                     options={"verify_exp": True}
                 )
                 print("✓ Signature is valid")
