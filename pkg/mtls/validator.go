@@ -1,7 +1,7 @@
 package mtls
 
 import (
-	"crypto/tls"
+	"bytes"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"golang.org/x/crypto/ocsp"
 )
 
 // CertificateInfo holds certificate validation results
@@ -52,14 +54,14 @@ type Validator struct {
 
 // ValidationPolicies defines certificate validation rules
 type ValidationPolicies struct {
-	MinKeySize            int
-	MaxCertAge            time.Duration
-	RequireOCSP           bool
-	AllowSelfSigned       bool
-	RequiredKeyUsages     []x509.KeyUsage
-	RequiredExtKeyUsages  []x509.ExtKeyUsage
-	BlockedIssuers        []string
-	ExpiryWarningDays     int
+	MinKeySize           int
+	MaxCertAge           time.Duration
+	RequireOCSP          bool
+	AllowSelfSigned      bool
+	RequiredKeyUsages    []x509.KeyUsage
+	RequiredExtKeyUsages []x509.ExtKeyUsage
+	BlockedIssuers       []string
+	ExpiryWarningDays    int
 }
 
 // NewValidator creates a new certificate validator
@@ -154,9 +156,24 @@ func (v *Validator) ValidateCertificate(cert *x509.Certificate, intermediates []
 		}
 	}
 
-	// Check OCSP
-	if v.Policies.RequireOCSP && len(cert.OCSPServer) == 0 {
-		result.Warnings = append(result.Warnings, "Certificate has no OCSP responder")
+	// Check OCSP. A required revocation check is fail-closed: an unavailable
+	// responder, missing issuer, unknown status, or invalid response is not a
+	// valid certificate result.
+	if v.Policies.RequireOCSP {
+		if len(cert.OCSPServer) == 0 {
+			result.Valid = false
+			result.Errors = append(result.Errors, "Certificate has no OCSP responder")
+		} else if len(intermediates) == 0 {
+			result.Valid = false
+			result.Errors = append(result.Errors, "OCSP issuer certificate is required")
+		} else if status, err := v.CheckOCSPStatus(cert, intermediates[0]); err != nil || status != "good" {
+			result.Valid = false
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("OCSP validation failed: %v", err))
+			} else {
+				result.Errors = append(result.Errors, fmt.Sprintf("OCSP status is %s", status))
+			}
+		}
 	}
 
 	// Validate certificate chain
@@ -212,37 +229,50 @@ func (v *Validator) validateChain(cert *x509.Certificate, intermediates []*x509.
 
 // CheckOCSPStatus checks the OCSP status of a certificate
 func (v *Validator) CheckOCSPStatus(cert *x509.Certificate, issuer *x509.Certificate) (string, error) {
+	if issuer == nil {
+		return "error", fmt.Errorf("issuer certificate is required")
+	}
 	if len(cert.OCSPServer) == 0 {
 		return "no-ocsp", fmt.Errorf("certificate has no OCSP server")
 	}
 
-	ocspReq, err := x509.CreateRequest(cert, issuer, nil)
+	ocspReq, err := ocsp.CreateRequest(cert, issuer, nil)
 	if err != nil {
 		return "error", fmt.Errorf("failed to create OCSP request: %w", err)
 	}
 
-	resp, err := http.Post(cert.OCSPServer[0], "application/ocsp-request", nil)
+	request, err := http.NewRequest(http.MethodPost, cert.OCSPServer[0], bytes.NewReader(ocspReq))
+	if err != nil {
+		return "error", fmt.Errorf("failed to create OCSP HTTP request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/ocsp-request")
+	request.Header.Set("Accept", "application/ocsp-response")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(request)
 	if err != nil {
 		return "error", fmt.Errorf("failed to send OCSP request: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "error", fmt.Errorf("OCSP responder returned HTTP %d", resp.StatusCode)
+	}
 
 	ocspResp, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "error", fmt.Errorf("failed to read OCSP response: %w", err)
 	}
 
-	parsedResp, err := x509.ParseOCSPResponse(ocspResp)
+	parsedResp, err := ocsp.ParseResponseForCert(ocspResp, cert, issuer)
 	if err != nil {
 		return "error", fmt.Errorf("failed to parse OCSP response: %w", err)
 	}
 
 	switch parsedResp.Status {
-	case 0:
+	case ocsp.Good:
 		return "good", nil
-	case 1:
+	case ocsp.Revoked:
 		return "revoked", nil
-	case 2:
+	case ocsp.Unknown:
 		return "unknown", nil
 	default:
 		return "unknown", fmt.Errorf("unexpected OCSP status: %d", parsedResp.Status)
