@@ -57,14 +57,14 @@ type Validator struct {
 
 // ValidationPolicies defines certificate validation rules
 type ValidationPolicies struct {
-	MinKeySize            int
-	MaxCertAge            time.Duration
-	RequireOCSP           bool
-	AllowSelfSigned       bool
-	RequiredKeyUsages     []x509.KeyUsage
-	RequiredExtKeyUsages  []x509.ExtKeyUsage
-	BlockedIssuers        []string
-	ExpiryWarningDays     int
+	MinKeySize           int
+	MaxCertAge           time.Duration
+	RequireOCSP          bool
+	AllowSelfSigned      bool
+	RequiredKeyUsages    []x509.KeyUsage
+	RequiredExtKeyUsages []x509.ExtKeyUsage
+	BlockedIssuers       []string
+	ExpiryWarningDays    int
 }
 
 // NewValidator creates a new certificate validator
@@ -228,53 +228,61 @@ func (v *Validator) validateChain(cert *x509.Certificate, intermediates []*x509.
 
 // CheckOCSPStatus checks the OCSP status of a certificate.
 func (v *Validator) CheckOCSPStatus(cert *x509.Certificate, issuer *x509.Certificate) (string, error) {
+	if cert == nil || issuer == nil {
+		return "error", fmt.Errorf("issuer certificate is required")
+	}
 	if len(cert.OCSPServer) == 0 {
 		return "no-ocsp", fmt.Errorf("certificate has no OCSP server")
 	}
 
-	// FIX 1B-1: use the correct ocsp package API (not x509.CreateRequest)
-	ocspReqBytes, err := ocsp.CreateRequest(cert, issuer, nil)
+	ocspReq, err := ocsp.CreateRequest(cert, issuer, nil)
 	if err != nil {
 		return "error", fmt.Errorf("failed to create OCSP request: %w", err)
 	}
 
-	// FIX 1B-2: validate URL (SSRF guard) and use a client with timeout
-	ocspURL := cert.OCSPServer[0]
-	u, err := url.Parse(ocspURL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		return "error", fmt.Errorf("invalid OCSP URL: %s", ocspURL)
+	u, err := url.Parse(cert.OCSPServer[0])
+	if err != nil || u.User != nil || (u.Scheme != "https" && u.Scheme != "http") {
+		return "error", fmt.Errorf("invalid OCSP URL")
 	}
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post(ocspURL, "application/ocsp-request", bytes.NewReader(ocspReqBytes))
+	request, err := http.NewRequest(http.MethodPost, cert.OCSPServer[0], bytes.NewReader(ocspReq))
+	if err != nil {
+		return "error", fmt.Errorf("failed to create OCSP HTTP request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/ocsp-request")
+	request.Header.Set("Accept", "application/ocsp-response")
+	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(request)
 	if err != nil {
 		return "error", fmt.Errorf("failed to send OCSP request: %w", err)
 	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "error", fmt.Errorf("OCSP responder returned HTTP %d", resp.StatusCode)
+	}
 
-	// FIX 1B-3: explicit close (not deferred) so we drain + close before returning
-	body, err := io.ReadAll(resp.Body)
-	io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	ocspResp, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return "error", fmt.Errorf("failed to read OCSP response: %w", err)
 	}
 
-	ocspResp, err := ocsp.ParseResponse(body, issuer)
+	parsedResp, err := ocsp.ParseResponseForCert(ocspResp, cert, issuer)
 	if err != nil {
 		return "error", fmt.Errorf("failed to parse OCSP response: %w", err)
 	}
 
-	switch ocspResp.Status {
+	switch parsedResp.Status {
 	case ocsp.Good:
 		return "good", nil
 	case ocsp.Revoked:
-		return "revoked", fmt.Errorf("certificate revoked at %v", ocspResp.RevokedAt)
-	default:
+		return "revoked", nil
+	case ocsp.Unknown:
 		return "unknown", nil
+	default:
+		return "unknown", fmt.Errorf("unexpected OCSP status: %d", parsedResp.Status)
 	}
 }
 
-// LoadPinnedCertificates loads pinned certificate fingerprints from a file.
-// Each non-comment line must be: <hostname> <sha256-hex-fingerprint>
+// LoadPinnedCertificates loads pinned certificate fingerprints
 func (v *Validator) LoadPinnedCertificates(pinFile string) error {
 	data, err := os.ReadFile(pinFile)
 	if err != nil {
@@ -397,4 +405,3 @@ func getKeySize(cert *x509.Certificate) int {
 	}
 	return 0
 }
-
