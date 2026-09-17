@@ -398,9 +398,3 @@ func getKeySize(cert *x509.Certificate) int {
 	return 0
 }
 
-// MonitorTLSConnections monitors network traffic for TLS handshakes
-func (v *Validator) MonitorTLSConnections(iface string) error {
-	// TODO: Implement packet capture and TLS handshake extraction
-	// This will use gopacket to capture traffic and extract certificates
-	return fmt.Errorf("not implemented yet")
-}
