@@ -1,6 +1,8 @@
 # Binaries
 /bin/
 cmd/zt-validator/zt-validator
+/egress-auditor
+/zt-validator
 
 # Go
 *.exe
