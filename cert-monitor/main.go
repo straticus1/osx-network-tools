@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -27,8 +28,13 @@ func main() {
 	port := flag.Int("port", 443, "Port to connect to")
 	hostsFile := flag.String("hosts-file", "", "File containing list of hosts (one per line)")
 	warnDays := flag.Int("warn-days", 30, "Warn if certificate expires within this many days")
+	jsonOutput := flag.Bool("json", false, "Output certificate evidence as JSON")
 
 	flag.Parse()
+	output := os.Stdout
+	if *jsonOutput {
+		os.Stdout = os.Stderr
+	}
 
 	if *host == "" && *hostsFile == "" {
 		fmt.Fprintln(os.Stderr, "Error: Must provide either -host or -hosts-file")
@@ -55,13 +61,15 @@ func main() {
 	expiringSoon := []CertInfo{}
 	expired := []CertInfo{}
 	healthy := []CertInfo{}
+	failed := []CertInfo{}
 
 	for _, h := range hosts {
 		info := checkCertificate(h, *port)
-		
+
 		if info.Error != "" {
 			fmt.Printf("❌ %s\n", info.Host)
 			fmt.Printf("   Error: %s\n\n", info.Error)
+			failed = append(failed, info)
 			continue
 		}
 
@@ -83,10 +91,18 @@ func main() {
 		}
 		fmt.Println()
 	}
+	if *jsonOutput {
+		all := append(append(append(healthy, expiringSoon...), expired...), failed...)
+		if err := json.NewEncoder(output).Encode(all); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// Summary
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Printf("Summary: %d healthy, %d expiring soon, %d expired\n", 
+	fmt.Printf("Summary: %d healthy, %d expiring soon, %d expired\n",
 		len(healthy), len(expiringSoon), len(expired))
 
 	if len(expiringSoon) > 0 {
@@ -150,7 +166,7 @@ func checkCertificate(host string, port int) CertInfo {
 	info.Issuer = cert.Issuer.CommonName
 	info.NotBefore = cert.NotBefore
 	info.NotAfter = cert.NotAfter
-	
+
 	now := time.Now()
 	if now.Before(cert.NotBefore) {
 		info.IsValid = false

@@ -239,6 +239,10 @@ Examples:
     )
     
     args = parser.parse_args()
+    json_stdout = args.json == '-'
+    original_stdout = sys.stdout
+    if json_stdout:
+        sys.stdout = sys.stderr
     
     targets = []
     if is_valid_cidr(args.target):
@@ -260,6 +264,12 @@ Examples:
 
     for target in targets:
         print(f"\n--- Scanning Target: {target} ---")
+        try:
+            socket.gethostbyname(target)
+        except socket.gaierror as error:
+            print(f"Error resolving {target}: {error}")
+            all_results.append({'target': target, 'open_ports': [], 'error': str(error)})
+            continue
         scanner = PortScanner(target, timeout=args.timeout, threads=args.threads)
         
         try:
@@ -304,9 +314,13 @@ Examples:
 
     if args.json:
         try:
-            with open(args.json, 'w') as f:
-                json.dump(all_results, f, indent=2)
-            print(f"\n✓ Results saved to {args.json}")
+            if json_stdout:
+                json.dump(all_results, original_stdout)
+                original_stdout.write('\n')
+            else:
+                with open(args.json, 'w') as f:
+                    json.dump(all_results, f, indent=2)
+                print(f"\n✓ Results saved to {args.json}")
         except Exception as e:
             print(f"⚠ Error saving JSON: {e}")
 
